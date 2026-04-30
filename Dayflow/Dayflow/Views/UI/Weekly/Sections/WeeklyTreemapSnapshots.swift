@@ -101,6 +101,25 @@ struct WeeklyTreemapSnapshot {
           ),
         ]
       ),
+      WeeklyTreemapCategory(
+        id: "general",
+        name: "Research",
+        palette: .general,
+        apps: [
+          WeeklyTreemapApp(
+            id: "expedia",
+            name: "Expedia",
+            duration: 24 * 60,
+            change: .positive(45)
+          ),
+          WeeklyTreemapApp(
+            id: "general-google",
+            name: "Google",
+            duration: 24 * 60,
+            change: .neutral(2)
+          ),
+        ]
+      ),
     ]
   )
 
