@@ -22,7 +22,7 @@ struct WeeklyFocusHeatmapSection: View {
     static let labelsWidth: CGFloat = 22
     static let labelsToGridSpacing: CGFloat = 6
     static let rowHeight: CGFloat = 12
-    static let cellWidth: CGFloat = 7
+    static let cellWidth: CGFloat = 6
     static let cellHeight: CGFloat = 12
     static let axisWidth: CGFloat = 755
     static let axisTopSpacing: CGFloat = 8
@@ -31,7 +31,7 @@ struct WeeklyFocusHeatmapSection: View {
     static let legendCornerRadius: CGFloat = 2
   }
 
-  init(snapshot: WeeklyFocusHeatmapSnapshot, cellGap: CGFloat = 0.5) {
+  init(snapshot: WeeklyFocusHeatmapSnapshot, cellGap: CGFloat = 1) {
     self.snapshot = snapshot
     self.cellGap = cellGap
   }
