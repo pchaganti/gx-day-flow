@@ -22,8 +22,6 @@ struct DaySummaryView: View {
   @State private var isEditingFocusCategories = false
   @State private var distractionCategoryIDs: Set<UUID> = []
   @State private var isEditingDistractionCategories = false
-  @State private var hasEarlyAccess = UserDefaults.standard.bool(
-    forKey: "daySummaryEarlyAccessGranted")
 
   // MARK: - Pre-computed Stats (to avoid expensive parsing during body evaluation)
   // These are computed on background thread when data loads, avoiding main thread hangs
@@ -33,36 +31,11 @@ struct DaySummaryView: View {
   @State private var cachedTotalCapturedTime: TimeInterval = 0
   @State private var cachedFocusBlocks: [FocusBlock] = []
   @State private var cachedTotalDistractedTime: TimeInterval = 0
-
-  // MARK: - Animation State
-  @State private var gatePhase: GatePhase =
-    UserDefaults.standard.bool(forKey: "daySummaryEarlyAccessGranted") ? .hidden : .locked
-  @State private var gateOpacity: Double =
-    UserDefaults.standard.bool(forKey: "daySummaryEarlyAccessGranted") ? 0 : 1
-  @State private var gateScale: CGFloat = 1
-  @State private var contentBlur: CGFloat =
-    UserDefaults.standard.bool(forKey: "daySummaryEarlyAccessGranted") ? 0 : 20
-  @State private var contentScale: CGFloat =
-    UserDefaults.standard.bool(forKey: "daySummaryEarlyAccessGranted") ? 1.0 : 0.95
-  @State private var maskSize: CGFloat = 0
-  @State private var shockwaveScale: CGFloat = 0.1
-  @State private var shockwaveOpacity: Double = 0
-  @State private var successIconScale: CGFloat = 0.001
-  @State private var checkmarkStroke: CGFloat = 0
-  @State private var particleTrigger: Int = 0
   @State private var reviewSummary = TimelineReviewSummarySnapshot.placeholder
 
   private let showDistractionPattern = false
   private let focusSelectionStorageKey = "focusCategorySelection"
   private let distractionSelectionStorageKey = "distractionCategorySelection"
-  private let earlyAccessStorageKey = "daySummaryEarlyAccessGranted"
-
-  private enum GatePhase {
-    case locked
-    case requesting
-    case granted
-    case hidden
-  }
 
   private enum Design {
     static let contentWidth: CGFloat = 322
@@ -94,19 +67,6 @@ struct DaySummaryView: View {
     static let focusGapMinutes: Int = 5
     static let timelineDayStartMinutes: Int = 4 * 60
     static let minutesPerDay: Int = 24 * 60
-
-    static let gateCornerRadius: CGFloat = 16
-    static let gateBlurRadius: CGFloat = 3
-    static let gateTitleColor = Color(hex: "3A2F28")
-    static let gateSubtitleColor = Color(hex: "8A7B6C")
-    static let gateOverlineColor = Color(hex: "C9875E")
-    static let gateBorderColor = Color(hex: "F0D9C5")
-    static let gateAccent = Color(hex: "F3854B")
-    static let gateButtonText = Color(hex: "5A3C2C")
-    static let gateButtonShadow = Color.black.opacity(0.08)
-    static let gateGlow = Color(hex: "FAD2B3")
-    static let gateBackgroundStart = Color(hex: "FFF7EE")
-    static let gateBackgroundEnd = Color(hex: "FFF1E3")
   }
 
   /// Pre-computed card data with parsed timestamps to avoid expensive parsing during body evaluation
@@ -165,57 +125,36 @@ struct DaySummaryView: View {
   // MARK: - Body
 
   var body: some View {
-    ZStack {
-      ZStack {
-        ScrollView {
-          VStack(alignment: .leading, spacing: Design.sectionSpacing) {
-            daySoFarSection
+    ScrollView {
+      VStack(alignment: .leading, spacing: Design.sectionSpacing) {
+        daySoFarSection
 
-            sectionDivider
+        sectionDivider
 
-            reviewSection
+        reviewSection
 
-            sectionDivider
+        sectionDivider
 
-            focusSection
+        focusSection
 
-            sectionDivider
+        sectionDivider
 
-            distractionsSection
-          }
-          .frame(width: Design.contentWidth, alignment: .leading)
-          .padding(.top, Design.topPadding)
-          .padding(.bottom, Design.bottomPadding)
-          .padding(.horizontal, Design.horizontalPadding)
-          .onScrollStart(panelName: "day_summary") { direction in
-            AnalyticsService.shared.capture(
-              "right_panel_scrolled",
-              [
-                "panel": "day_summary",
-                "direction": direction,
-              ])
-          }
-        }
-        .scrollIndicators(.never)
-        .scaleEffect(contentScale)
-        .blur(radius: contentBlur)
+        distractionsSection
       }
-      .mask(
-        ZStack {
-          if gatePhase == .hidden {
-            Rectangle()
-          } else {
-            Circle().frame(width: maskSize, height: maskSize)
-          }
-        }
-      )
-
-      if gatePhase != .hidden {
-        earlyAccessGateOverlay
-          .scaleEffect(gateScale)
-          .opacity(gateOpacity)
+      .frame(width: Design.contentWidth, alignment: .leading)
+      .padding(.top, Design.topPadding)
+      .padding(.bottom, Design.bottomPadding)
+      .padding(.horizontal, Design.horizontalPadding)
+      .onScrollStart(panelName: "day_summary") { direction in
+        AnalyticsService.shared.capture(
+          "right_panel_scrolled",
+          [
+            "panel": "day_summary",
+            "direction": direction,
+          ])
       }
     }
+    .scrollIndicators(.never)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .onAppear {
       loadFocusSelectionIfNeeded()
@@ -246,11 +185,6 @@ struct DaySummaryView: View {
     .onChange(of: distractionCategoryIDs) {
       persistDistractionSelection()
       recomputeDistractionStats()
-    }
-    .onChange(of: hasEarlyAccess) { _, newValue in
-      if newValue {
-        UserDefaults.standard.set(true, forKey: earlyAccessStorageKey)
-      }
     }
     .contentShape(Rectangle())
     .onTapGesture {
@@ -381,177 +315,12 @@ struct DaySummaryView: View {
     .padding(.vertical, 20)
   }
 
-  // MARK: - Early Access Gate
-
-  private var earlyAccessGateOverlay: some View {
-    ZStack {
-      RoundedRectangle(cornerRadius: Design.gateCornerRadius, style: .continuous)
-        .fill(
-          LinearGradient(
-            colors: [Design.gateBackgroundStart, Design.gateBackgroundEnd],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-          )
-        )
-        .overlay(
-          RoundedRectangle(cornerRadius: Design.gateCornerRadius, style: .continuous)
-            .stroke(Design.gateBorderColor, lineWidth: 1)
-        )
-        .shadow(color: Design.gateButtonShadow, radius: 12, x: 0, y: 6)
-
-      ShockwaveView(scale: shockwaveScale, opacity: shockwaveOpacity)
-      SuccessParticlesView(trigger: particleTrigger)
-      ConfettiBurstView(trigger: particleTrigger)
-
-      VStack(spacing: 12) {
-        Text("EARLY ACCESS")
-          .font(.custom("Nunito", size: 11).weight(.semibold))
-          .foregroundColor(Design.gateOverlineColor)
-          .tracking(0.6)
-
-        Text("Your day so far")
-          .font(.custom("InstrumentSerif-Regular", size: 22))
-          .foregroundColor(Design.gateTitleColor)
-
-        Text(
-          "Your day so far is a preview of what's to come in Dashboard. This feature is still in beta and may change rapidly."
-        )
-        .font(.custom("Nunito", size: 11))
-        .foregroundColor(Design.gateSubtitleColor)
-        .multilineTextAlignment(.center)
-        .lineSpacing(2)
-
-        gateActionArea
-          .frame(height: 44)  // Fixed height to prevent layout jumps
-      }
-      .padding(.horizontal, 18)
-      .padding(.vertical, 16)
-    }
-    .padding(.horizontal, 6)
-    .padding(.vertical, 12)
-  }
-
   private var reviewSection: some View {
     TimelineReviewSummaryCard(
       summary: reviewSummary,
       cardsToReviewCount: cardsToReviewCount,
       onReviewTap: onReviewTap
     )
-  }
-
-  @ViewBuilder
-  private var gateActionArea: some View {
-    ZStack {
-      if gatePhase == .locked || gatePhase == .requesting {
-        Button(action: requestEarlyAccess) {
-          HStack(spacing: 8) {
-            if gatePhase == .requesting {
-              ProgressView()
-                .progressViewStyle(.circular)
-                .scaleEffect(0.6)
-            } else {
-              Image(systemName: "sparkles")
-                .font(.system(size: 12, weight: .semibold))
-            }
-
-            Text(gatePhase == .requesting ? "Requesting..." : "Request early access")
-              .font(.custom("Nunito", size: 12).weight(.semibold))
-          }
-          .foregroundColor(Design.gateButtonText)
-          .frame(height: 44)
-          .padding(.horizontal, 16)
-          .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-              .fill(
-                LinearGradient(
-                  colors: [Color(hex: "FFE3CB"), Color(hex: "FFD1AE")],
-                  startPoint: .topLeading,
-                  endPoint: .bottomTrailing
-                )
-              )
-          )
-          .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-              .stroke(Color(hex: "F2C7A3"), lineWidth: 1)
-          )
-          .shadow(color: Design.gateButtonShadow, radius: 6, x: 0, y: 3)
-        }
-        .buttonStyle(.plain)
-        .disabled(gatePhase == .requesting)
-        .buttonStyle(SquishButtonStyle())
-        .hoverScaleEffect(
-          enabled: gatePhase != .requesting,
-          scale: 1.02
-        )
-        .pointingHandCursorOnHover(
-          enabled: gatePhase != .requesting,
-          reassertOnPressEnd: true
-        )
-        .transition(.opacity.animation(.easeOut(duration: 0.2)))
-      }
-
-      if gatePhase == .granted {
-        VStack(spacing: 6) {
-          ZStack {
-            CheckmarkShape()
-              .trim(from: 0, to: checkmarkStroke)
-              .stroke(
-                Design.gateAccent,
-                style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
-              )
-              .frame(width: 24, height: 18)
-          }
-          .scaleEffect(successIconScale)
-
-          Text("Access granted!")
-            .font(.custom("Nunito", size: 12).weight(.bold))
-            .foregroundColor(Design.gateTitleColor)
-            .opacity(checkmarkStroke)
-            .offset(y: 2)
-        }
-      }
-    }
-  }
-
-  // MARK: - Animation Logic
-
-  private func requestEarlyAccess() {
-    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { gatePhase = .requesting }
-
-    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-      withAnimation(.interpolatingSpring(stiffness: 400, damping: 12)) {
-        gatePhase = .granted
-        successIconScale = 1.0
-        particleTrigger += 1
-        hasEarlyAccess = true
-      }
-      withAnimation(.easeOut(duration: 0.5)) { checkmarkStroke = 1.0 }
-      shockwaveOpacity = 1.0
-      withAnimation(.easeOut(duration: 0.7)) {
-        shockwaveScale = 6.0
-        shockwaveOpacity = 0
-      }
-
-      DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-        withAnimation(.spring(response: 0.7, dampingFraction: 0.85)) {
-          maskSize = 2500
-          contentScale = 1.0
-          contentBlur = 0
-        }
-        withAnimation(.easeIn(duration: 0.3)) {
-          gateOpacity = 0
-          gateScale = 1.1
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-          gatePhase = .hidden
-          AnalyticsService.shared.capture(
-            "day_summary_unlock_completed",
-            [
-              "source": "button"
-            ])
-        }
-      }
-    }
   }
 
   // MARK: - Focus Section
@@ -1222,19 +991,6 @@ struct DaySummaryView: View {
   }
 }
 
-private struct CheckmarkShape: Shape {
-  func path(in rect: CGRect) -> Path {
-    var path = Path()
-    let start = CGPoint(x: rect.minX, y: rect.midY)
-    let mid = CGPoint(x: rect.minX + rect.width * 0.42, y: rect.maxY)
-    let end = CGPoint(x: rect.maxX, y: rect.minY)
-    path.move(to: start)
-    path.addLine(to: mid)
-    path.addLine(to: end)
-    return path
-  }
-}
-
 private struct TotalFocusCard: View {
   let value: String
 
@@ -1266,65 +1022,6 @@ private struct TotalFocusCard: View {
         .stroke(Color.white, lineWidth: 1)
     )
     .clipShape(RoundedRectangle(cornerRadius: 8))
-  }
-}
-
-struct ShockwaveView: View {
-  let scale: CGFloat
-  let opacity: Double
-
-  var body: some View {
-    Circle()
-      .stroke(Color(hex: "F3854B"), lineWidth: 3)
-      .scaleEffect(scale)
-      .opacity(opacity)
-  }
-}
-
-struct SuccessParticlesView: View {
-  let trigger: Int
-
-  var body: some View {
-    ZStack {
-      ForEach(0..<15, id: \.self) { index in
-        Rectangle()
-          .fill(index.isMultiple(of: 2) ? Color(hex: "F3854B") : Color(hex: "3A2F28"))
-          .frame(width: 8, height: 8)
-          .modifier(ParticleModifier(trigger: trigger))
-      }
-    }
-  }
-}
-
-struct ParticleModifier: ViewModifier {
-  let trigger: Int
-  @State private var position: CGPoint = .zero
-  @State private var opacity: Double = 0
-
-  func body(content: Content) -> some View {
-    content
-      .offset(x: position.x, y: position.y)
-      .opacity(opacity)
-      .onChange(of: trigger) {
-        opacity = 1
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-          position = CGPoint(x: .random(in: -200...200), y: .random(in: -200...200))
-        }
-        withAnimation(.easeOut(duration: 0.5).delay(0.15)) {
-          opacity = 0
-        }
-      }
-  }
-}
-
-struct SquishButtonStyle: ButtonStyle {
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .dayflowPressScale(
-        configuration.isPressed,
-        pressedScale: 0.94,
-        animation: .interactiveSpring(response: 0.3, dampingFraction: 0.6)
-      )
   }
 }
 
