@@ -15,7 +15,7 @@
   </p>
 
   <p>
-    <a href="https://github.com/JerryZLiu/Dayflow/releases/latest/download/Dayflow.dmg">
+    <a href="https://dayflow.so/api/download?source=github_readme_top">
       <img src="docs/images/download_dayflow_button.png" alt="Download Dayflow for Mac" width="352">
     </a>
   </p>
@@ -101,7 +101,7 @@ If you choose a cloud provider, activity data needed for analysis is sent to tha
 Download the latest `Dayflow.dmg` from GitHub Releases:
 
 <p>
-  <a href="https://github.com/JerryZLiu/Dayflow/releases/latest/download/Dayflow.dmg">
+  <a href="https://dayflow.so/api/download?source=github_readme_install">
     <img src="docs/images/download_dayflow_button.png" alt="Download Dayflow for Mac" width="352">
   </a>
 </p>
